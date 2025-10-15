@@ -2,7 +2,7 @@
 set -xe
 
 # Variables
-S3_BUCKET="s3://my-codedeploy-artifacts-21"   # Your exact bucket
+S3_BUCKET="s3://my-codedeploy-artifacts-2"   # Your exact bucket
 TOMCAT_WEBAPP="/opt/tomcat/webapps"
 
 # Copy all files from S3 bucket recursively to Tomcat webapps
