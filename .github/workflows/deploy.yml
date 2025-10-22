@@ -8,8 +8,8 @@ on:
 env:
   applicationfolder: spring-boot-hello-world-example
   AWS_REGION: us-east-1
-  S3BUCKET: my-codedeploy-artifacts-1       # Update this bucket name
-  S3bucket_CodeGuru: codeguru-reviewer-21   # Update this bucket name
+  S3BUCKET: my-codedeploy-artifacts-1       # S3 bucket for deployment artifacts
+  S3bucket_CodeGuru: codeguru-reviewer-21   # S3 bucket for CodeGuru staging
 
 jobs:
   build:
@@ -68,18 +68,22 @@ jobs:
           role-session-name: GitHubActionsRole
           aws-region: ${{ env.AWS_REGION }}
 
-      # Copy only the file you want to scan
       - name: Prepare Single File for Scan
         run: |
           mkdir -p scan
           cp spring-boot-hello-world-example/src/main/java/com/helloworld/SpringBootHelloWorldExampleApplication.java scan/
 
-      # Run CodeGuru Reviewer only on that file
       - name: Run CodeGuru Reviewer
         uses: aws-actions/codeguru-reviewer@v1.1
         with:
           s3_bucket: ${{ env.S3bucket_CodeGuru }}
           build_path: ./scan
+          name: ${{ github.repository }}
+          source_path: .
+          source_branch: refs/heads/main
+          destination_branch: refs/heads/main
+          source_commit: ${{ github.sha }}
+          destination_commit: ${{ github.sha }}
 
       - name: Store SARIF file
         uses: actions/upload-artifact@v4
