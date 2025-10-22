@@ -8,8 +8,8 @@ on:
 env:
   applicationfolder: spring-boot-hello-world-example
   AWS_REGION: us-east-1
-  S3BUCKET: my-codedeploy-artifacts-1       # update this bucket name
-  S3bucket_CodeGuru: codeguru-reviewer-21   # update this bucket name
+  S3BUCKET: my-codedeploy-artifacts-1       # Update this bucket name
+  S3bucket_CodeGuru: codeguru-reviewer-21   # Update this bucket name
 
 jobs:
   build:
@@ -18,12 +18,11 @@ jobs:
     permissions:
       id-token: write
       contents: read
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
         with:
-          fetch-depth: 0   # important for CodeGuru to see full Git history
+          fetch-depth: 0   # Important for CodeGuru to see full Git history
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -56,12 +55,11 @@ jobs:
       id-token: write
       contents: read
       security-events: write
-
     steps:
       - name: Checkout Repository for CodeGuru
         uses: actions/checkout@v2
         with:
-          fetch-depth: 0   # Full Git history required
+          fetch-depth: 0
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -70,13 +68,13 @@ jobs:
           role-session-name: GitHubActionsRole
           aws-region: ${{ env.AWS_REGION }}
 
-      # ✅ Copy only the file you want to scan into a separate folder
+      # Copy only the file you want to scan
       - name: Prepare Single File for Scan
         run: |
-          mkdir scan
+          mkdir -p scan
           cp spring-boot-hello-world-example/src/main/java/com/helloworld/SpringBootHelloWorldExampleApplication.java scan/
 
-      # ✅ Run CodeGuru only on that file
+      # Run CodeGuru Reviewer only on that file
       - name: Run CodeGuru Reviewer
         uses: aws-actions/codeguru-reviewer@v1.1
         with:
@@ -89,7 +87,7 @@ jobs:
           name: SARIF_recommendations
           path: ./codeguru-results.sarif.json
 
-      - name: Upload Review Results
+      - name: Upload Review Results to GitHub
         uses: github/codeql-action/upload-sarif@v2
         with:
           sarif_file: codeguru-results.sarif.json
@@ -111,7 +109,6 @@ jobs:
     permissions:
       id-token: write
       contents: read
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
