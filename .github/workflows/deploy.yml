@@ -1,4 +1,4 @@
-name: Build and Deploy
+name: Build, Scan, and Deploy
 
 on:
   push:
@@ -8,7 +8,8 @@ on:
 env:
   applicationfolder: spring-boot-hello-world-example
   AWS_REGION: us-east-1
-  S3BUCKET: my-codedeploy-artifacts-2       # update this bucket name
+  S3BUCKET: my-codedeploy-artifacts-1       # update this bucket name
+  S3bucket_CodeGuru: codeguru-reviewer-21   # update this bucket name
 
 jobs:
   build:
@@ -17,11 +18,12 @@ jobs:
     permissions:
       id-token: write
       contents: read
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
         with:
-          fetch-depth: 0
+          fetch-depth: 0   # important for CodeGuru to see full Git history
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -35,10 +37,10 @@ jobs:
         with:
           java-version: 1.8
 
-      - name: chmod
+      - name: Make scripts executable
         run: chmod -R +x ./.github
 
-      - name: Build and Package Maven
+      - name: Build and Package Maven Project
         working-directory: ${{ env.applicationfolder }}
         run: $GITHUB_WORKSPACE/.github/scripts/build.sh
 
@@ -46,24 +48,82 @@ jobs:
         working-directory: ${{ env.applicationfolder }}/target
         run: aws s3 cp *.war s3://${{ env.S3BUCKET }}/
 
-  deploy:
-    name: Deploy to EC2
+  codescan:
+    name: CodeGuru Reviewer Scan
     needs: build
     runs-on: ubuntu-latest
-    environment: Dev
     permissions:
       id-token: write
       contents: read
-    steps:
-      - uses: actions/checkout@v2
+      security-events: write
 
-      - uses: aws-actions/configure-aws-credentials@v1
+    steps:
+      - name: Checkout Repository for CodeGuru
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0   # Full Git history required
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
         with:
           role-to-assume: ${{ secrets.IAMROLE_GITHUB }}
           role-session-name: GitHubActionsRole
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy Application
+      # ✅ Copy only the file you want to scan into a separate folder
+      - name: Prepare Single File for Scan
+        run: |
+          mkdir scan
+          cp spring-boot-hello-world-example/src/main/java/com/helloworld/SpringBootHelloWorldExampleApplication.java scan/
+
+      # ✅ Run CodeGuru only on that file
+      - name: Run CodeGuru Reviewer
+        uses: aws-actions/codeguru-reviewer@v1.1
+        with:
+          s3_bucket: ${{ env.S3bucket_CodeGuru }}
+          build_path: ./scan
+
+      - name: Store SARIF file
+        uses: actions/upload-artifact@v4
+        with:
+          name: SARIF_recommendations
+          path: ./codeguru-results.sarif.json
+
+      - name: Upload Review Results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: codeguru-results.sarif.json
+
+      - name: Fail on Critical Vulnerabilities
+        run: |
+          echo "Checking for critical vulnerabilities..."
+          count=$(jq '.runs[].results[] | select(.level == "error") | .level' codeguru-results.sarif.json | wc -l)
+          if (( $count > 0 )); then
+            echo "There are $count critical findings, stopping the pipeline."
+            exit 1
+          fi
+
+  deploy:
+    name: Deploy to EC2
+    needs: codescan
+    runs-on: ubuntu-latest
+    environment: Dev
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          role-to-assume: ${{ secrets.IAMROLE_GITHUB }}
+          role-session-name: GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy Application to EC2 via CodeDeploy
         run: |
           echo "Deploying branch ${{ github.ref }} to environment: Dev"
           commit_hash=$(git rev-parse HEAD)
