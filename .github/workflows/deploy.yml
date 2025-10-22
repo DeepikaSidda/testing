@@ -8,7 +8,8 @@ on:
 env:
   applicationfolder: spring-boot-hello-world-example
   AWS_REGION: us-east-1
-  S3BUCKET: my-codedeploy-artifacts-1  # for CodeDeploy artifacts only
+  S3BUCKET: my-codedeploy-artifacts-1          # for CodeDeploy artifacts
+  S3bucket_CodeGuru: codeguru-reviewer-21     # for CodeGuru temporary staging
 
 jobs:
   build:
@@ -67,12 +68,17 @@ jobs:
           role-session-name: GitHubActionsRole
           aws-region: ${{ env.AWS_REGION }}
 
-      # Run CodeGuru Reviewer directly from GitHub
+      - name: Prepare Single File for Scan
+        run: |
+          mkdir -p scan
+          cp spring-boot-hello-world-example/src/main/java/com/helloworld/SpringBootHelloWorldExampleApplication.java scan/
+
       - name: Run CodeGuru Reviewer
         uses: aws-actions/codeguru-reviewer@v1.1
         with:
-          name: ${{ github.repository }}
-          source_path: .
+          s3_bucket: ${{ env.S3bucket_CodeGuru }}
+          build_path: ./scan
+          source_path: ./scan
           source_branch: refs/heads/main
           destination_branch: refs/heads/main
           source_commit: ${{ github.sha }}
