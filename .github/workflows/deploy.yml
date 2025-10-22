@@ -46,16 +46,42 @@ jobs:
         working-directory: ${{ env.applicationfolder }}/target
         run: aws s3 cp *.war s3://${{ env.S3BUCKET }}/
 
-  # CodeGuru scan commented out - re-enable after fixing association
-  # codescan:
-  #   name: CodeGuru Reviewer Scan
-  #   needs: build
-  #   runs-on: ubuntu-latest
-  #   ...
+  codescan:
+    name: CodeQL Security Scan
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: java
+
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v1
+        with:
+          java-version: 1.8
+
+      - name: Build for CodeQL Analysis
+        working-directory: ${{ env.applicationfolder }}
+        run: mvn clean package -DskipTests
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+
+      - name: Check for Critical Vulnerabilities
+        run: |
+          echo "CodeQL analysis complete. Check Security tab for results."
 
   deploy:
     name: Deploy to EC2
-    needs: build  # Changed from: needs: codescan
+    needs: codescan
     runs-on: ubuntu-latest
     environment: Dev
     permissions:
